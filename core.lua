@@ -137,7 +137,7 @@ local function DoFishing()
         netIndex:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(unpack(args))
 
         -- 3. Tunggu sebentar lalu paksa selesai
-        task.wait(1.5)
+        task.wait(4)
         netIndex:WaitForChild("RE/FishingCompleted"):FireServer()
     end)
 
