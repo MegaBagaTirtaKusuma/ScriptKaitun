@@ -7,6 +7,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 
+-- ANTI AFK
+task.spawn(function()
+    local vu = game:GetService("VirtualUser")
+    player.Idled:Connect(function()
+        vu:CaptureController()
+        vu:ClickButton2(Vector2.new())
+        print(">> ANTI AFK ACTIVATED (King Bagas)")
+    end)
+end)
+
 -- Notifikasi
 task.spawn(function()
     local StarterGui = game:GetService("StarterGui")
