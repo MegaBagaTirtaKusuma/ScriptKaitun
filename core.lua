@@ -1,5 +1,6 @@
 --========================================================--
 -- AUTO FARM FISHING SCRIPT (STEALTH MODE / ANTI-BYFRON)
+-- Dengan delay lempar & tarik per-rod
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -45,7 +46,7 @@ print(">> MENUNGGU DATA...")
 local data = Replion.Client:WaitReplion("Data")
 print(">> DATA SIAP!")
 
--- Rod Data
+-- Rod Data (buat beli / track kepemilikan)
 local RodData = {
     {name = "Luck Rod",      price = 325,      id = 79, uuid = "4315aa13-5964-4e5d-bda1-84ba5b193695"},
     {name = "Lucky Rod",     price = 15000,    id = 4,  uuid = "1aaba2cd-9ed5-42f0-87fd-380d7acdc600"},
@@ -53,6 +54,40 @@ local RodData = {
     {name = "Steampunk Rod", price = 215000,   id = 6,  uuid = "56fceb1c-b6ba-4f76-8523-31e87aa40c59"},
     {name = "Astral Rod",    price = 1000000,  id = 5,  uuid = "28b54c20-7a83-413a-afb5-2df2853dd991"}
 }
+
+-- ⬇⬇⬇ TAMBAHAN: DELAY PER ROD (BERDASARKAN UUID) ⬇⬇⬇
+-- Kalau UUID rod tidak ada di sini, dianggap Starter Rod.
+local RodTimingByUUID = {
+    -- Luck Rod
+    ["4315aa13-5964-4e5d-bda1-84ba5b193695"] = {
+        throwDelay = 0.05,
+        pullDelay  = 2.3,
+    },
+    -- Lucky Rod
+    ["1aaba2cd-9ed5-42f0-87fd-380d7acdc600"] = {
+        throwDelay = 0.05,
+        pullDelay  = 1.9,
+    },
+    -- Midnight Rod
+    ["0c860299-a465-45ad-bcf4-46ae245a8bcd"] = {
+        throwDelay = 0.05,
+        pullDelay  = 1.4,
+    },
+    -- Steampunk Rod
+    ["56fceb1c-b6ba-4f76-8523-31e87aa40c59"] = {
+        throwDelay = 0.05,
+        pullDelay  = 1.3,
+    },
+    -- Astral Rod
+    ["28b54c20-7a83-413a-afb5-2df2853dd991"] = {
+        throwDelay = 0.05,
+        pullDelay  = 1.0,
+    },
+}
+
+-- Default = Starter Rod (kalau equip-nya bukan salah satu UUID di atas)
+local DEFAULT_THROW_DELAY = 0.05
+local DEFAULT_PULL_DELAY  = 2.8
 
 -- Teleport Locations
 local Map = {
@@ -92,6 +127,26 @@ local function GetOwnedRods()
         owned[rod.Id] = rod.UUID
     end
     return owned
+end
+
+-- ⬇⬇⬇ TAMBAHAN: AMBIL DELAY BERDASARKAN ROD YANG EQUIP ⬇⬇⬇
+local function GetCurrentRodDelays()
+    -- Di Replion Data, EquippedItems[1] adalah UUID item equip (Fishing Rods ketika EquippedType = "Fishing Rods")
+    local equippedList = data:GetExpect("EquippedItems") or {}
+    local currentUUID = equippedList[1]
+
+    if typeof(currentUUID) ~= "string" or currentUUID == "" then
+        -- Tidak ada data → anggap Starter Rod
+        return DEFAULT_THROW_DELAY, DEFAULT_PULL_DELAY
+    end
+
+    local cfg = RodTimingByUUID[currentUUID]
+    if cfg then
+        return cfg.throwDelay, cfg.pullDelay
+    end
+
+    -- UUID tidak dikenali → juga anggap Starter Rod
+    return DEFAULT_THROW_DELAY, DEFAULT_PULL_DELAY
 end
 
 -- SAFE TELEPORT (Lerp)
@@ -164,17 +219,24 @@ local function SellAll()
 end
 
 --========================================================--
--- AUTO FISH (STEALTH)
+-- AUTO FISH (STEALTH + PER-ROD DELAY)
 --========================================================--
 
 local function DoFishing()
     local success, err = pcall(function()
+        -- Ambil delay sesuai rod yang lagi ke-equip
+        local throwDelay, pullDelay = GetCurrentRodDelays()
 
+        -- Sedikit human delay sebelum mulai
         task.wait(randomDelay(0.15, 0.35))
 
+        -- Charge rod
         netIndex:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
-        task.wait(randomDelay(0.08, 0.20))
 
+        -- Delay lempar (trow delay) + jitter kecil
+        task.wait(throwDelay + math.random(-5, 5) / 1000)
+
+        -- Args lempar minigame (X,Y stabil + jitter kecil, waktu pakai tick())
         local args = {
             -1.233184814453125 + math.random(-3, 3) * 0.01,
             0.1392755888600895 + math.random(-3, 3) * 0.01,
@@ -183,8 +245,10 @@ local function DoFishing()
 
         netIndex:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(unpack(args))
 
-        task.wait(randomDelay(1.8, 2.9))
+        -- Delay tarik (pull delay) sesuai rod + jitter
+        task.wait(pullDelay + math.random(-15, 15) / 1000)
 
+        -- Selesaikan minigame
         netIndex:WaitForChild("RE/FishingCompleted"):FireServer()
     end)
 
