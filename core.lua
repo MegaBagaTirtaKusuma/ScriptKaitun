@@ -1,12 +1,27 @@
 --========================================================--
 -- AUTO FARM FISHING SCRIPT (STEALTH MODE / ANTI-BYFRON)
--- King Bagas Edition 👑🔥
 --========================================================--
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
+
+-- Notifikasi
+task.spawn(function()
+    local StarterGui = game:GetService("StarterGui")
+
+    for i = 1, 2 do
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "👑 King Bagas 👑",
+                Text = "Script Started Successfully",
+                Duration = 5
+            })
+        end)
+        task.wait(0.5)
+    end
+end)
 
 -- Services
 local Replion = require(ReplicatedStorage.Packages.Replion)
