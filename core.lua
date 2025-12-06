@@ -1,139 +1,202 @@
---========================================================--
--- ULTRA LIGHTWEIGHT AUTO FARM FISHING
---========================================================--
-
+-- ULTRA LIGHT AUTO FISH (LIGHT + PROGRESSION + AUTO BAIT)
 local P=game:GetService("Players").LocalPlayer
+local RS=game:GetService("ReplicatedStorage")
 local C=P.Character or P.CharacterAdded:Wait()
-local R=game:GetService("ReplicatedStorage")
-local N=R.Packages._Index["sleitnick_net@0.2.0"].net
-local D=require(R.Packages.Replion).Client:WaitReplion("Data")
+local Repl=require(RS.Packages.Replion).Client:WaitReplion("Data")
+local NET=RS.Packages._Index["sleitnick_net@0.2.0"].net
 
--- Anti AFK
-P.Idled:Connect(function()game:GetService("VirtualUser"):Button2Down(Vector2.zero,workspace.CurrentCamera.CFrame)end)
+-- anti-afk
+P.Idled:Connect(function()local v=game:GetService("VirtualUser")v:CaptureController()v:ClickButton2(Vector2.zero)end)
 
--- Rod Data: {name,price,id,uuid,throw,pull}
-local RD={
-{"Luck Rod",325,79,"4315aa13-5964-4e5d-bda1-84ba5b193695",.05,2.3},
-{"Lucky Rod",15e3,4,"1aaba2cd-9ed5-42f0-87fd-380d7acdc600",.05,1.9},
-{"Midnight Rod",5e4,80,"0c860299-a465-45ad-bcf4-46ae245a8bcd",.05,1.4},
-{"Steampunk Rod",215e3,6,"56fceb1c-b6ba-4f76-8523-31e87aa40c59",.05,1.3},
-{"Astral Rod",1e6,5,"28b54c20-7a83-413a-afb5-2df2853dd991",.05,1}
+-- rod table: {id,price,uuid}
+local R={
+ {79,325,"4315aa13-5964-4e5d-bda1-84ba5b193695"}, -- Luck
+ {4,15000,"1aaba2cd-9ed5-42f0-87fd-380d7acdc600"}, -- Lucky
+ {80,50000,"0c860299-a465-45ad-bcf4-46ae245a8bcd"}, -- Midnight
+ {6,215000,"56fceb1c-b6ba-4f76-8523-31e87aa40c59"}, -- Steampunk
+ {5,1000000,"28b54c20-7a83-413a-afb5-2df2853dd991"}   -- Astral
 }
 
--- Timing Lookup
-local T={}for _,r in ipairs(RD)do T[r[4]]={r[5],r[6]}end
+-- bait table: {id,price,name}
+local BAITS={
+ {15,1148484,"Corrupt Bait"},
+ {16,3700000,"Aether Bait"}
+}
 
--- Locations: {x,y,z}
-local L={{129,3.5,2751},{-534,19,163},{-3734,-135,-886},{-3597,-276,-1641}}
+-- delays by uuid (throw,pull) fallback starter
+local T={
+ ["4315aa13-5964-4e5d-bda1-84ba5b193695"]={.05,2.3},
+ ["1aaba2cd-9ed5-42f0-87fd-380d7acdc600"]={.05,1.9},
+ ["0c860299-a465-45ad-bcf4-46ae245a8bcd"]={.05,1.4},
+ ["56fceb1c-b6ba-4f76-8523-31e87aa40c59"]={.05,1.3},
+ ["28b54c20-7a83-413a-afb5-2df2853dd991"]={.05,1.0},
+}
+local DEF_THROW,DEF_PULL=0.05,2.8
+local LOCS={{129.1,3.5,2750.8},{-534.4,19.1,162.8},{-3733.7,-135.1,-885.9},{-3597.1,-275.6,-1640.9}}
 
 local FC=0
+local BAIT_EQUIPPED={} -- track bait sudah dibeli & di-equip
 
--- Utils
-local function W(t)task.wait(t+math.random(-5,5)/1e3)end
-local function GM()return(pcall(function()return D:GetExpect("Coins")end)and D:GetExpect("Coins"))or D:Get("Coins")or 0 end
-local function GO()local o={}for _,r in pairs(D:GetExpect({"Inventory","Fishing Rods"})or{})do o[r.Id]=r.UUID end return o end
-local function GD()local e=(D:GetExpect("EquippedItems")or{})[1]if not e then return.05,2.8 end local t=T[e]return t and t[1]or.05,t and t[2]or 2.8 end
+local function W(t) task.wait(t) end
+local function GM() local ok,v=pcall(function()return Repl:GetExpect("Coins")end) if ok and typeof(v)=="number" then return v end v=Repl:Get("Coins") return (typeof(v)=="number" and v) or 0 end
+local function GO() local out={} for _,it in pairs(Repl:GetExpect({"Inventory","Fishing Rods"}) or {}) do out[it.Id]=it.UUID end return out end
+local function CUR_DELAYS() local eq=Repl:GetExpect("EquippedItems") or {} local uuid=eq[1] if type(uuid)~="string" or uuid=="" then return DEF_THROW,DEF_PULL end local c=T[uuid] if c then return c[1],c[2] end return DEF_THROW,DEF_PULL end
+local function TP(i) local h=C:WaitForChild("HumanoidRootPart") local from=h.Position local to=Vector3.new(LOCS[i][1],LOCS[i][2],LOCS[i][3]) for k=1,6 do h.CFrame=CFrame.new(from:Lerp(to,k/6)) task.wait(0.03) end task.wait(0.25) end
+local function BUY(rid) if GM()<rid[2] then return false end local ok,err=pcall(function() NET:WaitForChild("RF/PurchaseFishingRod"):InvokeServer(rid[1]) end) return ok end
+local function EQU(uuid) local ok=pcall(function() NET:WaitForChild("RE/EquipItem"):FireServer(uuid,"Fishing Rods") end) if ok then task.wait(0.18) pcall(function() NET:WaitForChild("RE/EquipToolFromHotbar"):FireServer(1) end) task.wait(0.12) return true end return false end
+local function SELL() pcall(function() NET:WaitForChild("RF/SellAllItems"):InvokeServer() end) FC=0 end
 
--- Teleport
-local function TP(x,y,z)
-local h=C:WaitForChild("HumanoidRootPart")
-local f,t=h.Position,Vector3.new(x,y,z)
-for i=1,8 do h.CFrame=CFrame.new(f:Lerp(t,i/8))task.wait(.04)end
-W(.3)
+-- bait functions
+local function GET_OWNED_BAITS()
+ local inv=Repl:GetExpect({"Inventory","Baits"}) or {}
+ local owned={}
+ for _,b in pairs(inv) do owned[b.Id]=true end
+ return owned
 end
 
--- Buy
-local function B(r)
-if GM()<r[2]then return end
-return pcall(function()N:WaitForChild("RF/PurchaseFishingRod"):InvokeServer(r[3])end)
+local function BUY_BAIT(bait)
+ if GM()<bait[2] then return false end
+ local ok=pcall(function() NET:WaitForChild("RF/PurchaseBait"):InvokeServer(bait[1]) end)
+ if ok then
+  print(">> Bought:",bait[3])
+  task.wait(0.5)
+  return true
+ end
+ return false
 end
 
--- Equip
-local function E(u)
-if pcall(function()N:WaitForChild("RE/EquipItem"):FireServer(u,"Fishing Rods")end)then
-W(.2)
-pcall(function()N:WaitForChild("RE/EquipToolFromHotbar"):FireServer(1)end)
-W(.1)
-return true
-end
-end
-
--- Sell
-local function S()pcall(function()N:WaitForChild("RF/SellAllItems"):InvokeServer()end)FC=0 end
-
--- Fish
-local function F()
-local ok=pcall(function()
-local th,pl=GD()
-W(.1)
-N:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
-W(th)
-N:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(-1.23+math.random(-3,3)*.01,.14+math.random(-3,3)*.01,tick())
-W(pl)
-N:WaitForChild("RE/FishingCompleted"):FireServer()
-end)
-if ok then FC=FC+1 if FC>=5 then S()end W(.4)else W(1.5)end
-return ok
+local function EQUIP_BAIT(baitId)
+ local ok=pcall(function() NET:WaitForChild("RE/EquipBait"):FireServer(baitId) end)
+ if ok then
+  BAIT_EQUIPPED[baitId]=true
+  print(">> Equipped Bait:",baitId)
+  task.wait(0.3)
+  return true
+ end
+ return false
 end
 
--- Buy Next
-local function BN()
-local o,m=GO(),GM()
-for i,r in ipairs(RD)do
-if not o[r[3]]and m>=r[2]then
-if B(r)then
-W(.7)
-o=GO()
-if o[r[3]]then E(o[r[3]])return true end
-end
-end
-end
-end
-
--- Get DeepSea
-local function GDS()
-local ds=D:Get({"DeepSea","Available"})
-if ds and ds.Forever and ds.Forever.Quests then return ds.Forever.Quests end
-ds=D:Get("DeepSea")
-return ds and ds.Forever and ds.Forever.Quests
+-- check & equip best available bait (like rod system)
+local function CHECK_BEST_BAIT()
+ local owned=GET_OWNED_BAITS()
+ 
+ -- priority: Aether (16) > Corrupt (15)
+ for i=#BAITS,1,-1 do
+  local bait=BAITS[i]
+  if owned[bait[1]] then
+   if not BAIT_EQUIPPED[bait[1]] then
+    EQUIP_BAIT(bait[1])
+   end
+   return true
+  end
+ end
+ 
+ return false
 end
 
--- Check DeepSea
-local function CDS(i,t)local q=GDS()return q and q[i]and(q[i].Progress or 0)>=t end
-
--- Farm Rod
-local function FR(i)
-while true do
-local o=GO()
-if o[RD[i][3]]then E(o[RD[i][3]])break end
-if GM()>=RD[i][2]and BN()then break end
-F()
-W(.2)
+-- farm until can buy bait (like FARM_ROD)
+local function FARM_BAIT(idx)
+ local bait=BAITS[idx]
+ while true do
+  local owned=GET_OWNED_BAITS()
+  if owned[bait[1]] then
+   EQUIP_BAIT(bait[1])
+   break
+  end
+  if GM()>=bait[2] then
+   if BUY_BAIT(bait) then
+    task.wait(0.6)
+    owned=GET_OWNED_BAITS()
+    if owned[bait[1]] then
+     EQUIP_BAIT(bait[1])
+     break
+    end
+   end
+  end
+  
+  -- Check secret while farming bait (early completion)
+  local function CHK_SECRET()
+   local ds=Repl:Get({"DeepSea","Available"}) if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
+   ds=Repl:Get("DeepSea") if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
+   return false
+  end
+  
+  if CHK_SECRET() then
+   print(">> SECRET COMPLETE WHILE FARMING BAIT!")
+   return true -- exit early
+  end
+  
+  FISH()
+ end
 end
+
+local function FISH()
+ -- Check & equip best bait before fishing (auto upgrade system)
+ CHECK_BEST_BAIT()
+ 
+ local ok,err=pcall(function()
+   local th,pl=CUR_DELAYS()
+   task.wait(0.08) NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
+   task.wait(th + (math.random(-5,5)/1000))
+   NET:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(-1.23+math.random(-3,3)*0.01,0.14+math.random(-3,3)*0.01,tick())
+   task.wait(pl + (math.random(-10,10)/1000))
+   NET:WaitForChild("RE/FishingCompleted"):FireServer()
+ end)
+ if ok then FC=FC+1 if FC>=5 then SELL() end task.wait(0.35) return true end task.wait(1.2) return false
 end
 
--- Farm Location
-local function FL(li,rs)
-local l=L[li]
-TP(l[1],l[2],l[3])
-for _,ri in ipairs(rs)do FR(ri)end
+-- helper: farm until own rod index (use R[idx][1] id)
+local function FARM_ROD(idx)
+ local id=R[idx][1]
+ while true do
+   local owned=GO()
+   if owned[id] then EQU(owned[id]) break end
+   if GM()>=R[idx][2] then if BUY(R[idx]) then task.wait(0.6) owned=GO() if owned[id] then EQU(owned[id]) break end end end
+   FISH()
+ end
 end
 
--- Farm Sisyphus
-local function FS()TP(L[3][1],L[3][2],L[3][3])while not CDS(3,1)do F()W(.2)end end
+-- progression:
+-- 1) loc1 -> farm R[1],R[2]
+TP(1) FARM_ROD(1) FARM_ROD(2)
+-- 2) loc2 -> farm R[3] (Midnight)
+TP(2) FARM_ROD(3)
+-- once midnight owned -> go to loc4 and farm R[4],R[5]
+local owned=GO()
+if owned[R[3][1]] then
+  TP(4)
+  FARM_ROD(4)
+  FARM_ROD(5)
+end
 
--- Farm Treasure
-local function FT()TP(L[4][1],L[4][2],L[4][3])while not CDS(1,300)do F()W(.2)end end
+-- after astral owned -> go to sisyphus and farm baits + secret quest
+owned=GO()
+if owned[R[5][1]] then
+  print(">> Astral Rod owned! Moving to Sisyphus...")
+  TP(3) -- pindah ke sisyphus dulu
+  
+  -- Farm Corrupt Bait (akan auto-equip via CHECK_BEST_BAIT)
+  print(">> Farming Corrupt Bait...")
+  if FARM_BAIT(1)==true then
+   print(">> COMPLETE! (Secret obtained during Corrupt Bait farm)")
+   return -- exit script
+  end
+  
+  -- Farm Aether Bait (akan auto-equip via CHECK_BEST_BAIT)
+  print(">> Farming Aether Bait...")
+  if FARM_BAIT(2)==true then
+   print(">> COMPLETE! (Secret obtained during Aether Bait farm)")
+   return -- exit script
+  end
+  
+  -- farm until secret quest done (already at loc3)
+  local function SECRET()
+    local ds=Repl:Get({"DeepSea","Available"}) if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
+    ds=Repl:Get("DeepSea") if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
+    return false
+  end
+  while not SECRET() do FISH() end
+end
 
---========================================================--
--- MAIN
---========================================================--
-
-pcall(function()N:WaitForChild("RE/EquipToolFromHotbar"):FireServer(1)end)
-W(.8)
-
-FL(1,{1})
-FL(1,{2})
-FL(2,{3,4,5})
-FS()
-FT()
+-- done
+print(">> COMPLETE!")
