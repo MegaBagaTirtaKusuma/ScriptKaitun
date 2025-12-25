@@ -1,262 +1,195 @@
 -- =========================================================
--- 👑 KING BAGAS – ULTRA AUTO FISH FINAL
--- LEVEL SAFE (LV 1–2 OK) + FAST BITE CLICK (LV 3+)
+-- 👑 KING BAGAS – HYBRID AUTO FISH FINAL (PASTI MANCING)
+-- LV 1–2  : OLD AUTO FISH (NO MINIGAME)
+-- LV 3+   : FAST BITE CLICK + AUTO BEST ROD
 -- =========================================================
 
-local P = game:GetService("Players").LocalPlayer
-local RS = game:GetService("ReplicatedStorage")
-local C = P.Character or P.CharacterAdded:Wait()
-local Repl = require(RS.Packages.Replion).Client:WaitReplion("Data")
-local NET = RS.Packages._Index["sleitnick_net@0.2.0"].net
-local VIM = game:GetService("VirtualInputManager")
+local P=game:GetService("Players").LocalPlayer
+local RS=game:GetService("ReplicatedStorage")
+local C=P.Character or P.CharacterAdded:Wait()
+local Repl=require(RS.Packages.Replion).Client:WaitReplion("Data")
+local NET=RS.Packages._Index["sleitnick_net@0.2.0"].net
+local VIM=game:GetService("VirtualInputManager")
 
--- ================= CONFIG =================
-local ENABLE_RAPID_CLICK = true
-
--- FAST BITE CLICK
-local CLICK_SPEED_FAST = 0.002
-local CLICK_SPEED_SLOW = 0.01
-local CLICK_BURST_TIME = 0.35
-local CLICK_TOTAL_TIME = 2.5
--- =========================================
-
--- MODE FLAG (JANGAN DIHAPUS)
-local PROGRESS_MODE = true
-
--- Anti AFK
+-- anti-afk
 P.Idled:Connect(function()
- local v = game:GetService("VirtualUser")
+ local v=game:GetService("VirtualUser")
  v:CaptureController()
  v:ClickButton2(Vector2.zero)
 end)
 
 -- ================= DATA =================
--- {id, price, uuid}
-local RODS = {
- {79, 325, "4315aa13-5964-4e5d-bda1-84ba5b193695"},      -- Luck
- {4, 15000, "1aaba2cd-9ed5-42f0-87fd-380d7acdc600"},   -- Lucky
- {80, 50000, "0c860299-a465-45ad-bcf4-46ae245a8bcd"},  -- Midnight
- {6, 215000, "56fceb1c-b6ba-4f76-8523-31e87aa40c59"},  -- Steampunk
- {5, 1000000, "28b54c20-7a83-413a-afb5-2df2853dd991"}  -- Astral
+local R={
+ {79,325,"4315aa13-5964-4e5d-bda1-84ba5b193695"}, -- Luck
+ {4,15000,"1aaba2cd-9ed5-42f0-87fd-380d7acdc600"}, -- Lucky
+ {80,50000,"0c860299-a465-45ad-bcf4-46ae245a8bcd"}, -- Midnight
+ {6,215000,"56fceb1c-b6ba-4f76-8523-31e87aa40c59"}, -- Steampunk
+ {5,1000000,"28b54c20-7a83-413a-afb5-2df2853dd991"} -- Astral
 }
 
-local LOCS = {
+local LOCS={
  {129.1,3.5,2750.8},
  {-534.4,19.1,162.8},
  {-3733.7,-135.1,-885.9},
  {-3597.1,-275.6,-1640.9}
 }
 
-local AUTO_FISH_ENABLED = false
-local CLICKING = false
-local FC = 0
+local T={
+ ["4315aa13-5964-4e5d-bda1-84ba5b193695"]={.05,2.3},
+ ["1aaba2cd-9ed5-42f0-87fd-380d7acdc600"]={.05,1.9},
+ ["0c860299-a465-45ad-bcf4-46ae245a8bcd"]={.05,1.4},
+ ["56fceb1c-b6ba-4f76-8523-31e87aa40c59"]={.05,1.3},
+ ["28b54c20-7a83-413a-afb5-2df2853dd991"]={.05,1.0},
+}
+local DEF_THROW,DEF_PULL=0.05,2.8
+
+local FC=0
+local CLICKING=false
 
 -- ================= HELPERS =================
 local function GM()
- local ok,v = pcall(function()
-  return Repl:GetExpect("Coins")
- end)
+ local ok,v=pcall(function()return Repl:GetExpect("Coins")end)
  return (ok and type(v)=="number") and v or 0
 end
 
--- 🔹 LEVEL CHECK (INTI FIX)
 local function GET_LEVEL()
- local stats = Repl:Get("Stats")
- if stats and stats.Level then
-  return stats.Level
- end
- return 1
+ local s=Repl:Get("Stats")
+ return (s and s.Level) or 1
 end
 
-local function CAN_USE_MINIGAME()
- return GET_LEVEL() >= 3
-end
-
--- Inventory read (UUID optional)
-local function GET_OWNED_RODS()
- local inv = Repl:GetExpect({"Inventory","Fishing Rods"}) or {}
- local out = {}
- for _,it in pairs(inv) do
-  if it.Id then
-   out[it.Id] = it.UUID or true
-  end
+local function GO()
+ local out={}
+ for _,it in pairs(Repl:GetExpect({"Inventory","Fishing Rods"}) or {}) do
+  out[it.Id]=it.UUID or true
  end
  return out
 end
 
-local function ENABLE_AUTO_FISHING()
- if AUTO_FISH_ENABLED then return end
- for i=1,3 do
-  local ok = pcall(function()
-   NET:WaitForChild("RF/UpdateAutoFishingState"):InvokeServer(true)
-  end)
-  if ok then
-   AUTO_FISH_ENABLED = true
-   return
-  end
-  task.wait(0.4)
- end
+local function CUR_DELAYS()
+ local eq=Repl:GetExpect("EquippedItems") or {}
+ local uuid=eq[1]
+ if type(uuid)~="string" then return DEF_THROW,DEF_PULL end
+ local c=T[uuid]
+ return c and c[1],c and c[2] or DEF_PULL
 end
 
-local function EQUIP_ROD(uuid)
- if type(uuid) ~= "string" then return end
+local function EQU(uuid)
+ if type(uuid)~="string" then return end
  pcall(function()
-  NET:WaitForChild("RE/EquipItem"):FireServer(uuid, "Fishing Rods")
+  NET:WaitForChild("RE/EquipItem"):FireServer(uuid,"Fishing Rods")
  end)
- task.wait(0.15)
+ task.wait(0.2)
  pcall(function()
   NET:WaitForChild("RE/EquipToolFromHotbar"):FireServer(1)
  end)
- task.wait(0.15)
- ENABLE_AUTO_FISHING()
 end
 
--- AUTO BEST ROD
-local function EQUIP_BEST_ROD()
- local owned = GET_OWNED_RODS()
- for i = #RODS, 1, -1 do
-  local id = RODS[i][1]
-  if owned[id] then
-   if type(owned[id]) == "string" then
-    EQUIP_ROD(owned[id])
-   end
-   return true
-  end
- end
- return false
-end
-
--- ================= FAST BITE DETECTION =================
+-- ================= FAST CLICK (LV 3+) =================
 local function MINIGAME_ACTIVE()
- return P.PlayerGui:FindFirstChild("FishingMinigame", true) ~= nil
+ return P.PlayerGui:FindFirstChild("FishingMinigame",true)~=nil
 end
 
-local function WAIT_BITE(timeout)
- local start = tick()
- while tick() - start < timeout do
-  if MINIGAME_ACTIVE() then
-   return true
-  end
-  task.wait(0.01)
- end
- return false
-end
-
--- ================= RAPID CLICK =================
 local function RAPID_CLICK()
  if CLICKING then return end
- CLICKING = true
+ CLICKING=true
  task.spawn(function()
-  local cam = workspace.CurrentCamera.ViewportSize
-  local x,y = cam.X/2, cam.Y/2
-  local start = tick()
-
-  -- FAST BURST
-  while tick() - start < CLICK_BURST_TIME do
+  local cam=workspace.CurrentCamera.ViewportSize
+  local x,y=cam.X/2,cam.Y/2
+  local t=tick()
+  while tick()-t<2.5 do
    VIM:SendMouseButtonEvent(x,y,0,true,game,0)
-   task.wait(0.001)
+   task.wait(0.002)
    VIM:SendMouseButtonEvent(x,y,0,false,game,0)
-   task.wait(CLICK_SPEED_FAST)
+   task.wait(0.008)
   end
-
-  -- STABLE
-  while tick() - start < CLICK_TOTAL_TIME do
-   VIM:SendMouseButtonEvent(x,y,0,true,game,0)
-   task.wait(0.001)
-   VIM:SendMouseButtonEvent(x,y,0,false,game,0)
-   task.wait(CLICK_SPEED_SLOW)
-  end
-
-  CLICKING = false
+  CLICKING=false
  end)
 end
 
--- ================= CORE =================
+-- ================= CORE FISH =================
 local function SELL()
  pcall(function()
   NET:WaitForChild("RF/SellAllItems"):InvokeServer()
  end)
- FC = 0
+ FC=0
+end
+
+-- 🔥 AUTO FISH LAMA (PASTI WORK LV 1–2)
+local function FISH_OLD()
+ local ok=pcall(function()
+  local th,pl=CUR_DELAYS()
+  task.wait(0.08)
+  NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
+  task.wait(th)
+  NET:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(-1.23,0.14,tick())
+  task.wait(pl)
+  NET:WaitForChild("RE/FishingCompleted"):FireServer()
+ end)
+ if ok then FC+=1 if FC>=5 then SELL() end end
+ task.wait(0.35)
+end
+
+-- ⚡ AUTO FISH BARU (LV 3+)
+local function FISH_NEW()
+ if MINIGAME_ACTIVE() then
+  RAPID_CLICK()
+ end
+ task.wait(3.2)
+ FC+=1
+ if FC>=5 then SELL() end
+ task.wait(0.3)
 end
 
 local function FISH()
- if not PROGRESS_MODE then
-  EQUIP_BEST_ROD()
- end
-
- -- 🔥 AUTCLICK HANYA JIKA LEVEL >= 3
- if ENABLE_RAPID_CLICK and CAN_USE_MINIGAME() then
-  if WAIT_BITE(1.2) then
-   RAPID_CLICK()
-  end
+ if GET_LEVEL()<3 then
+  FISH_OLD()
  else
-  -- fallback pemula (LV 1–2)
-  task.wait(3.5)
+  FISH_NEW()
  end
-
- task.wait(3.2)
- FC += 1
- if FC >= 5 then SELL() end
- task.wait(0.25 + math.random()*0.15)
 end
 
-local function BUY_ROD(idx)
- if GM() < RODS[idx][2] then return false end
+-- ================= PROGRESSION =================
+local function TP(i)
+ local h=C:WaitForChild("HumanoidRootPart")
+ h.CFrame=CFrame.new(LOCS[i][1],LOCS[i][2],LOCS[i][3])
+ task.wait(0.4)
+end
+
+local function BUY(r)
+ if GM()<r[2] then return false end
  return pcall(function()
-  NET:WaitForChild("RF/PurchaseFishingRod"):InvokeServer(RODS[idx][1])
+  NET:WaitForChild("RF/PurchaseFishingRod"):InvokeServer(r[1])
  end)
 end
 
 local function FARM_ROD(idx)
- local id = RODS[idx][1]
+ local id=R[idx][1]
  while true do
-  local owned = GET_OWNED_RODS()
+  local owned=GO()
   if owned[id] then
-   EQUIP_BEST_ROD()
+   if type(owned[id])=="string" then EQU(owned[id]) end
    break
   end
-  if GM() >= RODS[idx][2] then
-   BUY_ROD(idx)
-   task.wait(0.6)
-  end
+  if GM()>=R[idx][2] then BUY(R[idx]) task.wait(0.6) end
   FISH()
  end
 end
 
--- ================= TELEPORT =================
-local function TP(i)
- local hrp = C:WaitForChild("HumanoidRootPart")
- hrp.CFrame = CFrame.new(
-  LOCS[i][1],
-  LOCS[i][2],
-  LOCS[i][3]
- )
- task.wait(0.4)
-end
+-- ================= MAIN =================
+print(">> HYBRID AUTO FISH STARTED")
 
--- ================= MAIN FLOW =================
-print("==========================================")
-print(" ULTRA AUTO FISH – FINAL LEVEL SAFE ")
-print("==========================================")
-
--- PHASE 1
 TP(1)
 FARM_ROD(1)
 FARM_ROD(2)
 
--- PHASE 2
 TP(2)
 FARM_ROD(3)
 
--- PHASE 3
 TP(4)
 FARM_ROD(4)
 FARM_ROD(5)
 
--- ENDGAME
-PROGRESS_MODE = false
 TP(3)
-
 while true do
  FISH()
 end
