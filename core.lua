@@ -1,6 +1,6 @@
 -- =========================================================
 -- 👑 KING BAGAS – ULTRA AUTO FISH FINAL
--- FAST BITE CLICK + AUTO BEST ROD + TELEPORT PROGRESSION
+-- LEVEL SAFE (LV 1–2 OK) + FAST BITE CLICK (LV 3+)
 -- =========================================================
 
 local P = game:GetService("Players").LocalPlayer
@@ -11,14 +11,13 @@ local NET = RS.Packages._Index["sleitnick_net@0.2.0"].net
 local VIM = game:GetService("VirtualInputManager")
 
 -- ================= CONFIG =================
-local USE_GAME_AUTO_FISH = true
 local ENABLE_RAPID_CLICK = true
 
--- 🔥 FAST BITE CLICK (FINAL)
-local CLICK_SPEED_FAST = 0.002      -- super cepat (awal bite)
-local CLICK_SPEED_SLOW = 0.01       -- stabil
-local CLICK_BURST_TIME = 0.35       -- 350 ms pertama
-local CLICK_TOTAL_TIME = 2.5        -- total click time
+-- FAST BITE CLICK
+local CLICK_SPEED_FAST = 0.002
+local CLICK_SPEED_SLOW = 0.01
+local CLICK_BURST_TIME = 0.35
+local CLICK_TOTAL_TIME = 2.5
 -- =========================================
 
 -- MODE FLAG (JANGAN DIHAPUS)
@@ -60,6 +59,19 @@ local function GM()
  return (ok and type(v)=="number") and v or 0
 end
 
+-- 🔹 LEVEL CHECK (INTI FIX)
+local function GET_LEVEL()
+ local stats = Repl:Get("Stats")
+ if stats and stats.Level then
+  return stats.Level
+ end
+ return 1
+end
+
+local function CAN_USE_MINIGAME()
+ return GET_LEVEL() >= 3
+end
+
 -- Inventory read (UUID optional)
 local function GET_OWNED_RODS()
  local inv = Repl:GetExpect({"Inventory","Fishing Rods"}) or {}
@@ -99,7 +111,7 @@ local function EQUIP_ROD(uuid)
  ENABLE_AUTO_FISHING()
 end
 
--- AUTO BEST ROD (GLOBAL)
+-- AUTO BEST ROD
 local function EQUIP_BEST_ROD()
  local owned = GET_OWNED_RODS()
  for i = #RODS, 1, -1 do
@@ -119,7 +131,6 @@ local function MINIGAME_ACTIVE()
  return P.PlayerGui:FindFirstChild("FishingMinigame", true) ~= nil
 end
 
--- tunggu momen ikan makan umpan (event-based)
 local function WAIT_BITE(timeout)
  local start = tick()
  while tick() - start < timeout do
@@ -131,7 +142,7 @@ local function WAIT_BITE(timeout)
  return false
 end
 
--- ================= RAPID CLICK (FINAL) =================
+-- ================= RAPID CLICK =================
 local function RAPID_CLICK()
  if CLICKING then return end
  CLICKING = true
@@ -140,7 +151,7 @@ local function RAPID_CLICK()
   local x,y = cam.X/2, cam.Y/2
   local start = tick()
 
-  -- 🔥 FAST BURST (awal bite)
+  -- FAST BURST
   while tick() - start < CLICK_BURST_TIME do
    VIM:SendMouseButtonEvent(x,y,0,true,game,0)
    task.wait(0.001)
@@ -148,7 +159,7 @@ local function RAPID_CLICK()
    task.wait(CLICK_SPEED_FAST)
   end
 
-  -- 🧠 STABLE CLICK (lanjutan)
+  -- STABLE
   while tick() - start < CLICK_TOTAL_TIME do
    VIM:SendMouseButtonEvent(x,y,0,true,game,0)
    task.wait(0.001)
@@ -173,11 +184,14 @@ local function FISH()
   EQUIP_BEST_ROD()
  end
 
- if ENABLE_RAPID_CLICK then
-  -- ⚡ trigger tepat saat bite (maks 1.2s)
+ -- 🔥 AUTCLICK HANYA JIKA LEVEL >= 3
+ if ENABLE_RAPID_CLICK and CAN_USE_MINIGAME() then
   if WAIT_BITE(1.2) then
    RAPID_CLICK()
   end
+ else
+  -- fallback pemula (LV 1–2)
+  task.wait(3.5)
  end
 
  task.wait(3.2)
@@ -221,9 +235,9 @@ local function TP(i)
 end
 
 -- ================= MAIN FLOW =================
-print("======================================")
-print(" ULTRA AUTO FISH – FINAL FAST CLICK ")
-print("======================================")
+print("==========================================")
+print(" ULTRA AUTO FISH – FINAL LEVEL SAFE ")
+print("==========================================")
 
 -- PHASE 1
 TP(1)
@@ -239,7 +253,7 @@ TP(4)
 FARM_ROD(4)
 FARM_ROD(5)
 
--- ENDGAME MODE
+-- ENDGAME
 PROGRESS_MODE = false
 TP(3)
 
