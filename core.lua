@@ -94,7 +94,7 @@ local function CHECK_BEST_BAIT()
  return false
 end
 
--- farm until can buy bait (like FARM_ROD)
+-- check secret quest completion
 local function CHK_SECRET()
  local ds=Repl:Get({"DeepSea","Available"}) 
  if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then 
@@ -107,6 +107,23 @@ local function CHK_SECRET()
  return false
 end
 
+-- FISH function (must be defined BEFORE FARM_BAIT)
+local function FISH()
+ -- Check & equip best bait before fishing (auto upgrade system)
+ CHECK_BEST_BAIT()
+ 
+ local ok,err=pcall(function()
+   local th,pl=CUR_DELAYS()
+   task.wait(0.08) NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
+   task.wait(th + (math.random(-5,5)/1000))
+   NET:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(-1.23+math.random(-3,3)*0.01,0.14+math.random(-3,3)*0.01,tick())
+   task.wait(pl + (math.random(-10,10)/1000))
+   NET:WaitForChild("RE/FishingCompleted"):FireServer()
+ end)
+ if ok then FC=FC+1 if FC>=5 then SELL() end task.wait(0.35) return true end task.wait(1.2) return false
+end
+
+-- farm until can buy bait (like FARM_ROD)
 local function FARM_BAIT(idx)
  local bait=BAITS[idx]
  while true do
@@ -126,7 +143,7 @@ local function FARM_BAIT(idx)
    end
   end
   
-  -- Check secret while farming bait
+  -- Check secret while farming bait (early completion)
   if CHK_SECRET() then
    print(">> SECRET COMPLETE WHILE FARMING BAIT!")
    return true
@@ -135,21 +152,6 @@ local function FARM_BAIT(idx)
   FISH()
  end
  return false
-end
-
-local function FISH()
- -- Check & equip best bait before fishing (auto upgrade system)
- CHECK_BEST_BAIT()
- 
- local ok,err=pcall(function()
-   local th,pl=CUR_DELAYS()
-   task.wait(0.08) NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
-   task.wait(th + (math.random(-5,5)/1000))
-   NET:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(-1.23+math.random(-3,3)*0.01,0.14+math.random(-3,3)*0.01,tick())
-   task.wait(pl + (math.random(-10,10)/1000))
-   NET:WaitForChild("RE/FishingCompleted"):FireServer()
- end)
- if ok then FC=FC+1 if FC>=5 then SELL() end task.wait(0.35) return true end task.wait(1.2) return false
 end
 
 -- helper: farm until own rod index (use R[idx][1] id)
@@ -197,12 +199,8 @@ if owned[R[5][1]] then
   end
   
   -- farm until secret quest done (already at loc3)
-  local function SECRET()
-    local ds=Repl:Get({"DeepSea","Available"}) if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
-    ds=Repl:Get("DeepSea") if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
-    return false
-  end
-  while not SECRET() do FISH() end
+  print(">> Farming for Secret Quest completion...")
+  while not CHK_SECRET() do FISH() end
 end
 
 -- done
