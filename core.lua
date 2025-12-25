@@ -95,6 +95,18 @@ local function CHECK_BEST_BAIT()
 end
 
 -- farm until can buy bait (like FARM_ROD)
+local function CHK_SECRET()
+ local ds=Repl:Get({"DeepSea","Available"}) 
+ if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then 
+  return (ds.Forever.Quests[3].Progress or 0)>=1 
+ end
+ ds=Repl:Get("DeepSea") 
+ if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then 
+  return (ds.Forever.Quests[3].Progress or 0)>=1 
+ end
+ return false
+end
+
 local function FARM_BAIT(idx)
  local bait=BAITS[idx]
  while true do
@@ -114,16 +126,10 @@ local function FARM_BAIT(idx)
    end
   end
   
-  -- Check secret while farming bait (early completion)
-  local function CHK_SECRET()
-   local ds=Repl:Get({"DeepSea","Available"}) if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
-   ds=Repl:Get("DeepSea") if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then return (ds.Forever.Quests[3].Progress or 0)>=1 end
-   return false
-  end
-  
+  -- Check secret while farming bait
   if CHK_SECRET() then
    print(">> SECRET COMPLETE WHILE FARMING BAIT!")
-   return true -- exit early
+   return true
   end
   
   FISH()
