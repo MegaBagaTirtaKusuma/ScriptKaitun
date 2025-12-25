@@ -1,7 +1,7 @@
--- ======================================================
--- 👑 KING BAGAS – ULTRA AUTO FISH (FINAL FIX)
--- AUTO BEST ROD + AUTO FISH + RAPID CLICK
--- ======================================================
+-- =========================================================
+-- 👑 KING BAGAS – ULTRA AUTO FISH FINAL
+-- AUTO BEST ROD + TELEPORT PROGRESSION (NO FEATURE REMOVED)
+-- =========================================================
 
 local P = game:GetService("Players").LocalPlayer
 local RS = game:GetService("ReplicatedStorage")
@@ -15,7 +15,10 @@ local USE_GAME_AUTO_FISH = true
 local ENABLE_RAPID_CLICK = true
 local CLICK_SPEED = 0.01
 local CLICK_DURATION = 2.5
--- ==========================================
+-- =========================================
+
+-- MODE FLAG (⚠️ JANGAN DIHAPUS)
+local PROGRESS_MODE = true
 
 -- Anti AFK
 P.Idled:Connect(function()
@@ -46,8 +49,6 @@ local CLICKING = false
 local FC = 0
 
 -- ================= HELPERS =================
-local function W(t) task.wait(t) end
-
 local function GM()
  local ok,v = pcall(function()
   return Repl:GetExpect("Coins")
@@ -55,7 +56,7 @@ local function GM()
  return (ok and type(v)=="number") and v or 0
 end
 
--- ✅ FIXED: ROD DETECTION (UUID OPTIONAL)
+-- ✅ FIXED INVENTORY READ
 local function GET_OWNED_RODS()
  local inv = Repl:GetExpect({"Inventory","Fishing Rods"}) or {}
  local out = {}
@@ -75,7 +76,6 @@ local function ENABLE_AUTO_FISHING()
   end)
   if ok then
    AUTO_FISH_ENABLED = true
-   print(">> Auto Fishing ENABLED")
    return
   end
   task.wait(0.4)
@@ -95,12 +95,11 @@ local function EQUIP_ROD(uuid)
  ENABLE_AUTO_FISHING()
 end
 
--- ✅ FINAL: AUTO BEST ROD CHECK
+-- ✅ AUTO BEST ROD (GLOBAL)
 local function EQUIP_BEST_ROD()
  local owned = GET_OWNED_RODS()
  for i = #RODS, 1, -1 do
-  local rod = RODS[i]
-  local id = rod[1]
+  local id = RODS[i][1]
   if owned[id] then
    if type(owned[id]) == "string" then
     EQUIP_ROD(owned[id])
@@ -113,8 +112,7 @@ end
 
 -- ================= RAPID CLICK =================
 local function MINIGAME_ACTIVE()
- local gui = P.PlayerGui
- return gui:FindFirstChild("FishingMinigame", true) ~= nil
+ return P.PlayerGui:FindFirstChild("FishingMinigame", true) ~= nil
 end
 
 local function RAPID_CLICK()
@@ -134,7 +132,7 @@ local function RAPID_CLICK()
  end)
 end
 
--- ================= FISH =================
+-- ================= CORE =================
 local function SELL()
  pcall(function()
   NET:WaitForChild("RF/SellAllItems"):InvokeServer()
@@ -143,7 +141,9 @@ local function SELL()
 end
 
 local function FISH()
- EQUIP_BEST_ROD()
+ if not PROGRESS_MODE then
+  EQUIP_BEST_ROD()
+ end
 
  if ENABLE_RAPID_CLICK then
   task.wait(0.8)
@@ -158,21 +158,64 @@ local function FISH()
  task.wait(0.25 + math.random()*0.15)
 end
 
--- ================= TP =================
+local function BUY_ROD(idx)
+ if GM() < RODS[idx][2] then return false end
+ return pcall(function()
+  NET:WaitForChild("RF/PurchaseFishingRod"):InvokeServer(RODS[idx][1])
+ end)
+end
+
+local function FARM_ROD(idx)
+ local id = RODS[idx][1]
+ while true do
+  local owned = GET_OWNED_RODS()
+  if owned[id] then
+   EQUIP_BEST_ROD()
+   break
+  end
+
+  if GM() >= RODS[idx][2] then
+   BUY_ROD(idx)
+   task.wait(0.6)
+  end
+
+  FISH()
+ end
+end
+
+-- ================= TELEPORT =================
 local function TP(i)
  local hrp = C:WaitForChild("HumanoidRootPart")
- local to = Vector3.new(LOCS[i][1],LOCS[i][2],LOCS[i][3])
- hrp.CFrame = CFrame.new(to)
+ hrp.CFrame = CFrame.new(
+  LOCS[i][1],
+  LOCS[i][2],
+  LOCS[i][3]
+ )
  task.wait(0.4)
 end
 
--- ================= MAIN =================
-print("===================================")
-print(" ULTRA AUTO FISH - FINAL VERSION ")
-print(" Auto Best Rod : ACTIVE")
-print("===================================")
+-- ================= MAIN FLOW =================
+print("======================================")
+print(" ULTRA AUTO FISH – FINAL PROGRESSION ")
+print("======================================")
 
+-- PHASE 1
 TP(1)
+FARM_ROD(1)
+FARM_ROD(2)
+
+-- PHASE 2
+TP(2)
+FARM_ROD(3)
+
+-- PHASE 3
+TP(4)
+FARM_ROD(4)
+FARM_ROD(5)
+
+-- ENDGAME MODE
+PROGRESS_MODE = false
+TP(3)
 
 while true do
  FISH()
