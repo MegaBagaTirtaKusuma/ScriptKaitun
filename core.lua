@@ -13,7 +13,8 @@ local UIS=game:GetService("UserInputService")
 local USE_GAME_AUTO_FISH = true -- Pakai auto fishing bawaan game
 local ENABLE_RAPID_CLICK = true -- Spam click saat minigame
 local CLICK_SPEED = 0.01 -- Delay antar click (makin kecil makin cepat)
-local CLICK_DURATION = 2.5 -- Durasi spam click (seconds)
+local CLICK_DURATION = 2.0 -- Durasi spam click (seconds)
+local CLICK_DELAY_START = 1.2 -- Delay sebelum mulai click (tunggu minigame muncul)
 local SHOW_NOTIFICATIONS = false -- Notifikasi OFF
 -- ============================================
 
@@ -63,7 +64,7 @@ local function NOTIFY(text, duration)
  end)
 end
 
--- Rapid click function (background mode - tidak ganggu layar)
+-- Rapid click function (simple & effective)
 local function RAPID_CLICK()
  if not ENABLE_RAPID_CLICK or CLICKING then return end
  CLICKING=true
@@ -71,31 +72,21 @@ local function RAPID_CLICK()
  task.spawn(function()
   local start_time = tick()
   local clicks = 0
+  local screenSize = workspace.CurrentCamera.ViewportSize
+  local centerX, centerY = screenSize.X/2, screenSize.Y/2
   
   while tick() - start_time < CLICK_DURATION do
-   -- Method 1: Direct RemoteEvent (tidak pakai VIM)
-   -- Langsung trigger fishing complete event
-   pcall(function()
-    -- Simulate click tanpa visual feedback
-    local mouse = P:GetMouse()
-    if mouse then
-     -- Fire click event secara internal
-     mouse.Button1Down:Fire()
-     task.wait(0.001)
-     mouse.Button1Up:Fire()
-    end
+   -- Simple VIM click (most reliable method)
+   local success = pcall(function()
+    VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+    task.wait(0.001)
+    VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
    end)
    
-   -- Method 2: UserInputService (background)
-   pcall(function()
-    UIS:GetMouseButtonsPressed()
-   end)
-   
-   clicks = clicks + 1
+   if success then clicks = clicks + 1 end
    task.wait(CLICK_SPEED)
   end
   
-  print(">> Rapid click completed:", clicks, "clicks")
   CLICKING=false
  end)
 end
@@ -110,10 +101,7 @@ local function ENABLE_AUTO_FISHING()
  
  if ok then
   AUTO_FISH_ENABLED=true
-  print(">> ✓ Game Auto Fishing enabled!")
-  NOTIFY("✓ Auto Fishing ON", 2)
- else
-  warn(">> Failed to enable auto fishing")
+  print(">> Auto Fishing enabled")
  end
 end
 
@@ -124,7 +112,7 @@ local function CUR_DELAYS() local eq=Repl:GetExpect("EquippedItems") or {} local
 local function TP(i) local h=C:WaitForChild("HumanoidRootPart") local from=h.Position local to=Vector3.new(LOCS[i][1],LOCS[i][2],LOCS[i][3]) for k=1,6 do h.CFrame=CFrame.new(from:Lerp(to,k/6)) task.wait(0.03) end task.wait(0.25) end
 local function BUY(rid) if GM()<rid[2] then return false end local ok,err=pcall(function() NET:WaitForChild("RF/PurchaseFishingRod"):InvokeServer(rid[1]) end) return ok end
 local function EQU(uuid) local ok=pcall(function() NET:WaitForChild("RE/EquipItem"):FireServer(uuid,"Fishing Rods") end) if ok then task.wait(0.18) pcall(function() NET:WaitForChild("RE/EquipToolFromHotbar"):FireServer(1) end) task.wait(0.12) return true end return false end
-local function SELL() pcall(function() NET:WaitForChild("RF/SellAllItems"):InvokeServer() end) FC=0 NOTIFY("💰 Sold all fish!",1.5) end
+local function SELL() pcall(function() NET:WaitForChild("RF/SellAllItems"):InvokeServer() end) FC=0 end
 
 -- bait functions
 local function GET_OWNED_BAITS()
@@ -139,7 +127,6 @@ local function BUY_BAIT(bait)
  local ok=pcall(function() NET:WaitForChild("RF/PurchaseBait"):InvokeServer(bait[1]) end)
  if ok then
   print(">> Bought:",bait[3])
-  NOTIFY("Bought: "..bait[3],2)
   task.wait(0.5)
   return true
  end
@@ -150,7 +137,6 @@ local function EQUIP_BAIT(baitId)
  local ok=pcall(function() NET:WaitForChild("RE/EquipBait"):FireServer(baitId) end)
  if ok then
   BAIT_EQUIPPED[baitId]=true
-  print(">> Equipped Bait:",baitId)
   task.wait(0.3)
   return true
  end
@@ -193,12 +179,12 @@ FISH = function()
  if USE_GAME_AUTO_FISH then
   -- Let game auto fish, but add rapid click for minigame
   if ENABLE_RAPID_CLICK then
-   -- Wait sedikit untuk minigame muncul
-   task.wait(1.0)
+   -- Wait untuk minigame muncul
+   task.wait(CLICK_DELAY_START)
    -- Spam click untuk speed up minigame
    RAPID_CLICK()
-   -- Wait sisa waktu fishing
-   task.wait(2.5)
+   -- Wait sisa waktu
+   task.wait(CLICK_DURATION + 0.3)
   else
    task.wait(3.5)
   end
@@ -262,8 +248,7 @@ local function FARM_BAIT(idx)
    end
   end
   if CHK_SECRET() then
-   print(">> SECRET COMPLETE WHILE FARMING BAIT!")
-   NOTIFY("✓ Secret Quest Complete!",3)
+   print(">> Secret Quest Complete!")
    return true
   end
   FISH()
