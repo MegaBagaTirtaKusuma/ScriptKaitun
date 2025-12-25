@@ -128,6 +128,7 @@ local function FARM_BAIT(idx)
   
   FISH()
  end
+ return false
 end
 
 local function FISH()
