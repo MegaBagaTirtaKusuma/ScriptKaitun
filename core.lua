@@ -1,21 +1,19 @@
--- ULTRA LIGHT AUTO FISH (WITH ANIMATION MODE)
+-- ULTRA LIGHT AUTO FISH (AUTO FISHING + RAPID CLICK MINIGAME)
 local P=game:GetService("Players").LocalPlayer
 local RS=game:GetService("ReplicatedStorage")
 local C=P.Character or P.CharacterAdded:Wait()
 local Repl=require(RS.Packages.Replion).Client:WaitReplion("Data")
 local NET=RS.Packages._Index["sleitnick_net@0.2.0"].net
+local VIM=game:GetService("VirtualInputManager")
 
 -- ============================================
--- CONFIG: ANIMATION MODE
+-- CONFIG: AUTO CLICK SETTINGS
 -- ============================================
-local SHOW_ANIMATION = true -- Set false untuk fast mode
-local ANIMATION_DELAYS = {
- charge = 0.8,   -- Delay setelah charge rod (lihat animasi charge)
- throw = 2.0,    -- Delay setelah lempar (tunggu ikan gigit)
- catch = 0.8,    -- Delay setelah dapat ikan
- cooldown = 0.8  -- Cooldown sebelum mancing lagi
-}
-local SHOW_NOTIFICATIONS = true -- Set false untuk disable notif
+local USE_GAME_AUTO_FISH = true -- Pakai auto fishing bawaan game
+local ENABLE_RAPID_CLICK = true -- Spam click saat minigame
+local CLICK_SPEED = 0.01 -- Delay antar click (makin kecil makin cepat)
+local CLICK_DURATION = 2.5 -- Durasi spam click (seconds)
+local SHOW_NOTIFICATIONS = true
 -- ============================================
 
 -- anti-afk
@@ -49,6 +47,8 @@ local LOCS={{129.1,3.5,2750.8},{-534.4,19.1,162.8},{-3733.7,-135.1,-885.9},{-359
 
 local FC=0
 local BAIT_EQUIPPED={}
+local AUTO_FISH_ENABLED=false
+local CLICKING=false
 
 -- Notification helper
 local function NOTIFY(text, duration)
@@ -60,6 +60,53 @@ local function NOTIFY(text, duration)
    Duration = duration or 2;
   })
  end)
+end
+
+-- Rapid click function (spam click untuk minigame)
+local function RAPID_CLICK()
+ if not ENABLE_RAPID_CLICK or CLICKING then return end
+ CLICKING=true
+ 
+ task.spawn(function()
+  local start_time = tick()
+  local clicks = 0
+  
+  while tick() - start_time < CLICK_DURATION do
+   -- Simulate mouse click di tengah screen
+   local screenSize = workspace.CurrentCamera.ViewportSize
+   local x = screenSize.X / 2
+   local y = screenSize.Y / 2
+   
+   pcall(function()
+    VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
+    task.wait(0.001)
+    VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+   end)
+   
+   clicks = clicks + 1
+   task.wait(CLICK_SPEED)
+  end
+  
+  print(">> Rapid click completed:", clicks, "clicks")
+  CLICKING=false
+ end)
+end
+
+-- Enable game's auto fishing
+local function ENABLE_AUTO_FISHING()
+ if not USE_GAME_AUTO_FISH or AUTO_FISH_ENABLED then return end
+ 
+ local ok = pcall(function()
+  NET:WaitForChild("RF/UpdateAutoFishingState"):InvokeServer(true)
+ end)
+ 
+ if ok then
+  AUTO_FISH_ENABLED=true
+  print(">> ✓ Game Auto Fishing enabled!")
+  NOTIFY("✓ Auto Fishing ON", 2)
+ else
+  warn(">> Failed to enable auto fishing")
+ end
 end
 
 local function W(t) task.wait(t) end
@@ -131,63 +178,61 @@ end
 -- FORWARD DECLARATION
 local FISH
 
--- FISH function with animation mode
+-- FISH function (hybrid mode with rapid click)
 FISH = function()
  CHECK_BEST_BAIT()
  
- local ok,err=pcall(function()
+ if USE_GAME_AUTO_FISH then
+  -- Let game auto fish, but add rapid click for minigame
+  if ENABLE_RAPID_CLICK then
+   -- Wait sedikit untuk minigame muncul
+   task.wait(1.0)
+   -- Spam click untuk speed up minigame
+   RAPID_CLICK()
+   -- Wait sisa waktu fishing
+   task.wait(2.5)
+  else
+   task.wait(3.5)
+  end
+  
+  FC = FC + 1
+  if FC >= 5 then SELL() end
+  return true
+  
+ else
+  -- Custom fishing logic (original)
+  local ok,err=pcall(function()
    local th,pl=CUR_DELAYS()
    
-   -- Step 1: Charge rod
    task.wait(0.08) 
    NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
+   task.wait(th + (math.random(-5,5)/1000))
    
-   if SHOW_ANIMATION then
-    print(">> [1/3] ⚡ Charging rod...")
-    NOTIFY("⚡ Charging rod...",ANIMATION_DELAYS.charge)
-    task.wait(ANIMATION_DELAYS.charge)
-   else
-    task.wait(th + (math.random(-5,5)/1000))
-   end
-   
-   -- Step 2: Throw rod
    NET:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(
      -1.23+math.random(-3,3)*0.01,
      0.14+math.random(-3,3)*0.01,
      tick()
    )
    
-   if SHOW_ANIMATION then
-    print(">> [2/3] 🎣 Rod thrown! Waiting for bite...")
-    NOTIFY("🎣 Waiting for bite...",ANIMATION_DELAYS.throw)
-    task.wait(ANIMATION_DELAYS.throw)
-   else
-    task.wait(pl + (math.random(-10,10)/1000))
+   -- Rapid click during minigame
+   if ENABLE_RAPID_CLICK then
+    RAPID_CLICK()
    end
    
-   -- Step 3: Complete fishing
+   task.wait(pl + (math.random(-10,10)/1000))
    NET:WaitForChild("RE/FishingCompleted"):FireServer()
-   
-   if SHOW_ANIMATION then
-    print(">> [3/3] ✓ Fish caught!")
-    NOTIFY("🐟 Fish caught!",ANIMATION_DELAYS.catch)
-    task.wait(ANIMATION_DELAYS.catch)
-   end
-   
- end)
- 
- if ok then 
+  end)
+  
+  if ok then 
    FC=FC+1 
    if FC>=5 then SELL() end 
-   task.wait(SHOW_ANIMATION and ANIMATION_DELAYS.cooldown or 0.35) 
+   task.wait(0.35) 
    return true 
- end 
- 
- if SHOW_ANIMATION then
-  print(">> ✗ Fishing failed, retrying...")
+  end
+  
+  task.wait(1.2) 
+  return false
  end
- task.wait(1.2) 
- return false
 end
 
 local function FARM_BAIT(idx)
@@ -220,36 +265,55 @@ end
 
 local function FARM_ROD(idx)
  local id=R[idx][1]
+ local first_equip=true
  while true do
    local owned=GO()
-   if owned[id] then EQU(owned[id]) break end
-   if GM()>=R[idx][2] then if BUY(R[idx]) then task.wait(0.6) owned=GO() if owned[id] then EQU(owned[id]) break end end end
+   if owned[id] then 
+     EQU(owned[id])
+     if first_equip then
+      ENABLE_AUTO_FISHING()
+      first_equip=false
+     end
+     break 
+   end
+   if GM()>=R[idx][2] then 
+     if BUY(R[idx]) then 
+       task.wait(0.6) 
+       owned=GO() 
+       if owned[id] then 
+         EQU(owned[id])
+         if first_equip then
+          ENABLE_AUTO_FISHING()
+          first_equip=false
+         end
+         break 
+       end 
+     end 
+   end
    FISH()
  end
 end
 
 -- Show mode at start
 print("===========================================")
-print("   ULTRA LIGHT AUTO FISH - ANIMATION MODE")
+print("   ULTRA AUTO FISH - RAPID CLICK MODE")
 print("===========================================")
-print("Animation Mode:", SHOW_ANIMATION and "✓ ENABLED" or "✗ DISABLED")
-print("Notifications:", SHOW_NOTIFICATIONS and "✓ ENABLED" or "✗ DISABLED")
-if SHOW_ANIMATION then
- print("Delays: Charge="..ANIMATION_DELAYS.charge.."s | Throw="..ANIMATION_DELAYS.throw.."s | Catch="..ANIMATION_DELAYS.catch.."s")
+print("Game Auto Fish:", USE_GAME_AUTO_FISH and "✓ ENABLED" or "✗ DISABLED")
+print("Rapid Click:", ENABLE_RAPID_CLICK and "✓ ENABLED" or "✗ DISABLED")
+if ENABLE_RAPID_CLICK then
+ print("Click Speed:", CLICK_SPEED.."s | Duration:", CLICK_DURATION.."s")
+ print("Estimated clicks per catch:", math.floor(CLICK_DURATION/CLICK_SPEED))
 end
 print("===========================================")
-NOTIFY("Bot started!",2)
+NOTIFY("Bot started! Rapid click enabled",3)
 
--- progression:
--- 1) loc1 -> farm R[1],R[2]
+-- progression
 print(">> Phase 1: Farming Luck & Lucky Rods...")
 TP(1) FARM_ROD(1) FARM_ROD(2)
 
--- 2) loc2 -> farm R[3] (Midnight)
 print(">> Phase 2: Farming Midnight Rod...")
 TP(2) FARM_ROD(3)
 
--- once midnight owned -> go to loc4 and farm R[4],R[5]
 local owned=GO()
 if owned[R[3][1]] then
   print(">> Phase 3: Farming Steampunk & Astral Rods...")
@@ -258,14 +322,12 @@ if owned[R[3][1]] then
   FARM_ROD(5)
 end
 
--- after astral owned -> go to sisyphus and farm baits + secret quest
 owned=GO()
 if owned[R[5][1]] then
   print(">> Astral Rod owned! Moving to Sisyphus...")
   NOTIFY("Astral Rod equipped!",2)
   TP(3)
   
-  -- Farm Corrupt Bait
   print(">> Farming Corrupt Bait...")
   if FARM_BAIT(1)==true then
    print(">> COMPLETE! (Secret obtained during Corrupt Bait farm)")
@@ -273,7 +335,6 @@ if owned[R[5][1]] then
    return
   end
   
-  -- Farm Aether Bait
   print(">> Farming Aether Bait...")
   if FARM_BAIT(2)==true then
    print(">> COMPLETE! (Secret obtained during Aether Bait farm)")
@@ -281,11 +342,9 @@ if owned[R[5][1]] then
    return
   end
   
-  -- farm until secret quest done
   print(">> Farming for Secret Quest completion...")
   while not CHK_SECRET() do FISH() end
 end
 
--- done
 print(">> COMPLETE!")
 NOTIFY("✓ Bot Complete!",5)
