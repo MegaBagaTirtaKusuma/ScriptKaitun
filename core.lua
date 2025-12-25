@@ -37,6 +37,9 @@ local LOCS={{129.1,3.5,2750.8},{-534.4,19.1,162.8},{-3733.7,-135.1,-885.9},{-359
 local FC=0
 local BAIT_EQUIPPED={} -- track bait sudah dibeli & di-equip
 
+-- FORWARD DECLARATION - PENTING!
+local FISH
+
 local function W(t) task.wait(t) end
 local function GM() local ok,v=pcall(function()return Repl:GetExpect("Coins")end) if ok and typeof(v)=="number" then return v end v=Repl:Get("Coins") return (typeof(v)=="number" and v) or 0 end
 local function GO() local out={} for _,it in pairs(Repl:GetExpect({"Inventory","Fishing Rods"}) or {}) do out[it.Id]=it.UUID end return out end
@@ -76,11 +79,8 @@ local function EQUIP_BAIT(baitId)
  return false
 end
 
--- check & equip best available bait (like rod system)
 local function CHECK_BEST_BAIT()
  local owned=GET_OWNED_BAITS()
- 
- -- priority: Aether (16) > Corrupt (15)
  for i=#BAITS,1,-1 do
   local bait=BAITS[i]
   if owned[bait[1]] then
@@ -90,11 +90,9 @@ local function CHECK_BEST_BAIT()
    return true
   end
  end
- 
  return false
 end
 
--- check secret quest completion
 local function CHK_SECRET()
  local ds=Repl:Get({"DeepSea","Available"}) 
  if ds and ds.Forever and ds.Forever.Quests and ds.Forever.Quests[3] then 
@@ -107,11 +105,9 @@ local function CHK_SECRET()
  return false
 end
 
--- FISH function (must be defined BEFORE FARM_BAIT)
-local function FISH()
- -- Check & equip best bait before fishing (auto upgrade system)
+-- DEFINE FISH HERE (setelah forward declaration)
+FISH = function()
  CHECK_BEST_BAIT()
- 
  local ok,err=pcall(function()
    local th,pl=CUR_DELAYS()
    task.wait(0.08) NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
@@ -123,7 +119,6 @@ local function FISH()
  if ok then FC=FC+1 if FC>=5 then SELL() end task.wait(0.35) return true end task.wait(1.2) return false
 end
 
--- farm until can buy bait (like FARM_ROD)
 local function FARM_BAIT(idx)
  local bait=BAITS[idx]
  while true do
@@ -142,19 +137,15 @@ local function FARM_BAIT(idx)
     end
    end
   end
-  
-  -- Check secret while farming bait (early completion)
   if CHK_SECRET() then
    print(">> SECRET COMPLETE WHILE FARMING BAIT!")
    return true
   end
-  
   FISH()
  end
  return false
 end
 
--- helper: farm until own rod index (use R[idx][1] id)
 local function FARM_ROD(idx)
  local id=R[idx][1]
  while true do
@@ -165,12 +156,9 @@ local function FARM_ROD(idx)
  end
 end
 
--- progression:
--- 1) loc1 -> farm R[1],R[2]
+-- progression
 TP(1) FARM_ROD(1) FARM_ROD(2)
--- 2) loc2 -> farm R[3] (Midnight)
 TP(2) FARM_ROD(3)
--- once midnight owned -> go to loc4 and farm R[4],R[5]
 local owned=GO()
 if owned[R[3][1]] then
   TP(4)
@@ -178,30 +166,22 @@ if owned[R[3][1]] then
   FARM_ROD(5)
 end
 
--- after astral owned -> go to sisyphus and farm baits + secret quest
 owned=GO()
 if owned[R[5][1]] then
   print(">> Astral Rod owned! Moving to Sisyphus...")
-  TP(3) -- pindah ke sisyphus dulu
-  
-  -- Farm Corrupt Bait (akan auto-equip via CHECK_BEST_BAIT)
+  TP(3)
   print(">> Farming Corrupt Bait...")
   if FARM_BAIT(1)==true then
    print(">> COMPLETE! (Secret obtained during Corrupt Bait farm)")
-   return -- exit script
+   return
   end
-  
-  -- Farm Aether Bait (akan auto-equip via CHECK_BEST_BAIT)
   print(">> Farming Aether Bait...")
   if FARM_BAIT(2)==true then
    print(">> COMPLETE! (Secret obtained during Aether Bait farm)")
-   return -- exit script
+   return
   end
-  
-  -- farm until secret quest done (already at loc3)
   print(">> Farming for Secret Quest completion...")
   while not CHK_SECRET() do FISH() end
 end
 
--- done
 print(">> COMPLETE!")
