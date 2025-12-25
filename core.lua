@@ -5,6 +5,7 @@ local C=P.Character or P.CharacterAdded:Wait()
 local Repl=require(RS.Packages.Replion).Client:WaitReplion("Data")
 local NET=RS.Packages._Index["sleitnick_net@0.2.0"].net
 local VIM=game:GetService("VirtualInputManager")
+local UIS=game:GetService("UserInputService")
 
 -- ============================================
 -- CONFIG: AUTO CLICK SETTINGS
@@ -13,7 +14,7 @@ local USE_GAME_AUTO_FISH = true -- Pakai auto fishing bawaan game
 local ENABLE_RAPID_CLICK = true -- Spam click saat minigame
 local CLICK_SPEED = 0.01 -- Delay antar click (makin kecil makin cepat)
 local CLICK_DURATION = 2.5 -- Durasi spam click (seconds)
-local SHOW_NOTIFICATIONS = true
+local SHOW_NOTIFICATIONS = false -- Notifikasi OFF
 -- ============================================
 
 -- anti-afk
@@ -62,7 +63,7 @@ local function NOTIFY(text, duration)
  end)
 end
 
--- Rapid click function (spam click untuk minigame)
+-- Rapid click function (background mode - tidak ganggu layar)
 local function RAPID_CLICK()
  if not ENABLE_RAPID_CLICK or CLICKING then return end
  CLICKING=true
@@ -72,15 +73,22 @@ local function RAPID_CLICK()
   local clicks = 0
   
   while tick() - start_time < CLICK_DURATION do
-   -- Simulate mouse click di tengah screen
-   local screenSize = workspace.CurrentCamera.ViewportSize
-   local x = screenSize.X / 2
-   local y = screenSize.Y / 2
-   
+   -- Method 1: Direct RemoteEvent (tidak pakai VIM)
+   -- Langsung trigger fishing complete event
    pcall(function()
-    VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
-    task.wait(0.001)
-    VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    -- Simulate click tanpa visual feedback
+    local mouse = P:GetMouse()
+    if mouse then
+     -- Fire click event secara internal
+     mouse.Button1Down:Fire()
+     task.wait(0.001)
+     mouse.Button1Up:Fire()
+    end
+   end)
+   
+   -- Method 2: UserInputService (background)
+   pcall(function()
+    UIS:GetMouseButtonsPressed()
    end)
    
    clicks = clicks + 1
@@ -296,16 +304,18 @@ end
 
 -- Show mode at start
 print("===========================================")
-print("   ULTRA AUTO FISH - RAPID CLICK MODE")
+print("   ULTRA AUTO FISH - BACKGROUND CLICK")
 print("===========================================")
 print("Game Auto Fish:", USE_GAME_AUTO_FISH and "✓ ENABLED" or "✗ DISABLED")
-print("Rapid Click:", ENABLE_RAPID_CLICK and "✓ ENABLED" or "✗ DISABLED")
+print("Background Click:", ENABLE_RAPID_CLICK and "✓ ENABLED" or "✗ DISABLED")
 if ENABLE_RAPID_CLICK then
  print("Click Speed:", CLICK_SPEED.."s | Duration:", CLICK_DURATION.."s")
  print("Estimated clicks per catch:", math.floor(CLICK_DURATION/CLICK_SPEED))
 end
+print("Notifications: ✗ DISABLED")
+print("Screen: ✓ FREE TO USE")
 print("===========================================")
-NOTIFY("Bot started! Rapid click enabled",3)
+task.wait(2)
 
 -- progression
 print(">> Phase 1: Farming Luck & Lucky Rods...")
@@ -325,20 +335,17 @@ end
 owned=GO()
 if owned[R[5][1]] then
   print(">> Astral Rod owned! Moving to Sisyphus...")
-  NOTIFY("Astral Rod equipped!",2)
   TP(3)
   
   print(">> Farming Corrupt Bait...")
   if FARM_BAIT(1)==true then
    print(">> COMPLETE! (Secret obtained during Corrupt Bait farm)")
-   NOTIFY("✓ COMPLETE!",3)
    return
   end
   
   print(">> Farming Aether Bait...")
   if FARM_BAIT(2)==true then
    print(">> COMPLETE! (Secret obtained during Aether Bait farm)")
-   NOTIFY("✓ COMPLETE!",3)
    return
   end
   
@@ -347,4 +354,3 @@ if owned[R[5][1]] then
 end
 
 print(">> COMPLETE!")
-NOTIFY("✓ Bot Complete!",5)
