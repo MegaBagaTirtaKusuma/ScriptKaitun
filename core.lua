@@ -1,9 +1,22 @@
--- ULTRA LIGHT AUTO FISH (LIGHT + PROGRESSION + AUTO BAIT)
+-- ULTRA LIGHT AUTO FISH (WITH ANIMATION MODE)
 local P=game:GetService("Players").LocalPlayer
 local RS=game:GetService("ReplicatedStorage")
 local C=P.Character or P.CharacterAdded:Wait()
 local Repl=require(RS.Packages.Replion).Client:WaitReplion("Data")
 local NET=RS.Packages._Index["sleitnick_net@0.2.0"].net
+
+-- ============================================
+-- CONFIG: ANIMATION MODE
+-- ============================================
+local SHOW_ANIMATION = true -- Set false untuk fast mode
+local ANIMATION_DELAYS = {
+ charge = 0.8,   -- Delay setelah charge rod (lihat animasi charge)
+ throw = 2.0,    -- Delay setelah lempar (tunggu ikan gigit)
+ catch = 0.8,    -- Delay setelah dapat ikan
+ cooldown = 0.8  -- Cooldown sebelum mancing lagi
+}
+local SHOW_NOTIFICATIONS = true -- Set false untuk disable notif
+-- ============================================
 
 -- anti-afk
 P.Idled:Connect(function()local v=game:GetService("VirtualUser")v:CaptureController()v:ClickButton2(Vector2.zero)end)
@@ -35,10 +48,19 @@ local DEF_THROW,DEF_PULL=0.05,2.8
 local LOCS={{129.1,3.5,2750.8},{-534.4,19.1,162.8},{-3733.7,-135.1,-885.9},{-3597.1,-275.6,-1640.9}}
 
 local FC=0
-local BAIT_EQUIPPED={} -- track bait sudah dibeli & di-equip
+local BAIT_EQUIPPED={}
 
--- FORWARD DECLARATION - PENTING!
-local FISH
+-- Notification helper
+local function NOTIFY(text, duration)
+ if not SHOW_NOTIFICATIONS then return end
+ pcall(function()
+  game:GetService("StarterGui"):SetCore("SendNotification", {
+   Title = "🎣 Fishing Bot";
+   Text = text;
+   Duration = duration or 2;
+  })
+ end)
+end
 
 local function W(t) task.wait(t) end
 local function GM() local ok,v=pcall(function()return Repl:GetExpect("Coins")end) if ok and typeof(v)=="number" then return v end v=Repl:Get("Coins") return (typeof(v)=="number" and v) or 0 end
@@ -47,7 +69,7 @@ local function CUR_DELAYS() local eq=Repl:GetExpect("EquippedItems") or {} local
 local function TP(i) local h=C:WaitForChild("HumanoidRootPart") local from=h.Position local to=Vector3.new(LOCS[i][1],LOCS[i][2],LOCS[i][3]) for k=1,6 do h.CFrame=CFrame.new(from:Lerp(to,k/6)) task.wait(0.03) end task.wait(0.25) end
 local function BUY(rid) if GM()<rid[2] then return false end local ok,err=pcall(function() NET:WaitForChild("RF/PurchaseFishingRod"):InvokeServer(rid[1]) end) return ok end
 local function EQU(uuid) local ok=pcall(function() NET:WaitForChild("RE/EquipItem"):FireServer(uuid,"Fishing Rods") end) if ok then task.wait(0.18) pcall(function() NET:WaitForChild("RE/EquipToolFromHotbar"):FireServer(1) end) task.wait(0.12) return true end return false end
-local function SELL() pcall(function() NET:WaitForChild("RF/SellAllItems"):InvokeServer() end) FC=0 end
+local function SELL() pcall(function() NET:WaitForChild("RF/SellAllItems"):InvokeServer() end) FC=0 NOTIFY("💰 Sold all fish!",1.5) end
 
 -- bait functions
 local function GET_OWNED_BAITS()
@@ -62,6 +84,7 @@ local function BUY_BAIT(bait)
  local ok=pcall(function() NET:WaitForChild("RF/PurchaseBait"):InvokeServer(bait[1]) end)
  if ok then
   print(">> Bought:",bait[3])
+  NOTIFY("Bought: "..bait[3],2)
   task.wait(0.5)
   return true
  end
@@ -105,18 +128,66 @@ local function CHK_SECRET()
  return false
 end
 
--- DEFINE FISH HERE (setelah forward declaration)
+-- FORWARD DECLARATION
+local FISH
+
+-- FISH function with animation mode
 FISH = function()
  CHECK_BEST_BAIT()
+ 
  local ok,err=pcall(function()
    local th,pl=CUR_DELAYS()
-   task.wait(0.08) NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
-   task.wait(th + (math.random(-5,5)/1000))
-   NET:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(-1.23+math.random(-3,3)*0.01,0.14+math.random(-3,3)*0.01,tick())
-   task.wait(pl + (math.random(-10,10)/1000))
+   
+   -- Step 1: Charge rod
+   task.wait(0.08) 
+   NET:WaitForChild("RF/ChargeFishingRod"):InvokeServer()
+   
+   if SHOW_ANIMATION then
+    print(">> [1/3] ⚡ Charging rod...")
+    NOTIFY("⚡ Charging rod...",ANIMATION_DELAYS.charge)
+    task.wait(ANIMATION_DELAYS.charge)
+   else
+    task.wait(th + (math.random(-5,5)/1000))
+   end
+   
+   -- Step 2: Throw rod
+   NET:WaitForChild("RF/RequestFishingMinigameStarted"):InvokeServer(
+     -1.23+math.random(-3,3)*0.01,
+     0.14+math.random(-3,3)*0.01,
+     tick()
+   )
+   
+   if SHOW_ANIMATION then
+    print(">> [2/3] 🎣 Rod thrown! Waiting for bite...")
+    NOTIFY("🎣 Waiting for bite...",ANIMATION_DELAYS.throw)
+    task.wait(ANIMATION_DELAYS.throw)
+   else
+    task.wait(pl + (math.random(-10,10)/1000))
+   end
+   
+   -- Step 3: Complete fishing
    NET:WaitForChild("RE/FishingCompleted"):FireServer()
+   
+   if SHOW_ANIMATION then
+    print(">> [3/3] ✓ Fish caught!")
+    NOTIFY("🐟 Fish caught!",ANIMATION_DELAYS.catch)
+    task.wait(ANIMATION_DELAYS.catch)
+   end
+   
  end)
- if ok then FC=FC+1 if FC>=5 then SELL() end task.wait(0.35) return true end task.wait(1.2) return false
+ 
+ if ok then 
+   FC=FC+1 
+   if FC>=5 then SELL() end 
+   task.wait(SHOW_ANIMATION and ANIMATION_DELAYS.cooldown or 0.35) 
+   return true 
+ end 
+ 
+ if SHOW_ANIMATION then
+  print(">> ✗ Fishing failed, retrying...")
+ end
+ task.wait(1.2) 
+ return false
 end
 
 local function FARM_BAIT(idx)
@@ -139,6 +210,7 @@ local function FARM_BAIT(idx)
   end
   if CHK_SECRET() then
    print(">> SECRET COMPLETE WHILE FARMING BAIT!")
+   NOTIFY("✓ Secret Quest Complete!",3)
    return true
   end
   FISH()
@@ -156,32 +228,64 @@ local function FARM_ROD(idx)
  end
 end
 
--- progression
+-- Show mode at start
+print("===========================================")
+print("   ULTRA LIGHT AUTO FISH - ANIMATION MODE")
+print("===========================================")
+print("Animation Mode:", SHOW_ANIMATION and "✓ ENABLED" or "✗ DISABLED")
+print("Notifications:", SHOW_NOTIFICATIONS and "✓ ENABLED" or "✗ DISABLED")
+if SHOW_ANIMATION then
+ print("Delays: Charge="..ANIMATION_DELAYS.charge.."s | Throw="..ANIMATION_DELAYS.throw.."s | Catch="..ANIMATION_DELAYS.catch.."s")
+end
+print("===========================================")
+NOTIFY("Bot started!",2)
+
+-- progression:
+-- 1) loc1 -> farm R[1],R[2]
+print(">> Phase 1: Farming Luck & Lucky Rods...")
 TP(1) FARM_ROD(1) FARM_ROD(2)
+
+-- 2) loc2 -> farm R[3] (Midnight)
+print(">> Phase 2: Farming Midnight Rod...")
 TP(2) FARM_ROD(3)
+
+-- once midnight owned -> go to loc4 and farm R[4],R[5]
 local owned=GO()
 if owned[R[3][1]] then
+  print(">> Phase 3: Farming Steampunk & Astral Rods...")
   TP(4)
   FARM_ROD(4)
   FARM_ROD(5)
 end
 
+-- after astral owned -> go to sisyphus and farm baits + secret quest
 owned=GO()
 if owned[R[5][1]] then
   print(">> Astral Rod owned! Moving to Sisyphus...")
+  NOTIFY("Astral Rod equipped!",2)
   TP(3)
+  
+  -- Farm Corrupt Bait
   print(">> Farming Corrupt Bait...")
   if FARM_BAIT(1)==true then
    print(">> COMPLETE! (Secret obtained during Corrupt Bait farm)")
+   NOTIFY("✓ COMPLETE!",3)
    return
   end
+  
+  -- Farm Aether Bait
   print(">> Farming Aether Bait...")
   if FARM_BAIT(2)==true then
    print(">> COMPLETE! (Secret obtained during Aether Bait farm)")
+   NOTIFY("✓ COMPLETE!",3)
    return
   end
+  
+  -- farm until secret quest done
   print(">> Farming for Secret Quest completion...")
   while not CHK_SECRET() do FISH() end
 end
 
+-- done
 print(">> COMPLETE!")
+NOTIFY("✓ Bot Complete!",5)
